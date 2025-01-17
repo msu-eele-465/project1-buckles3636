@@ -29,6 +29,7 @@ SetupP1:
         bic.w   #LOCKLPM5,&PM5CTL0      ; Unlock I/O pins
 
 Mainloop:
+        jmp     Timer                   ; Jump to timer subroutine
         jmp     Delay                   ; Jump to delay subroutine
 
 ;-------------------------------------------------------------------------------
@@ -37,12 +38,41 @@ Mainloop:
 Delay:    
         xor.b   #BIT0,&P1OUT            ; Toggle P1.0 every 0.5s
 Wait:      
-        mov.w   #250000,R15             ; Delay to R15
+        mov.w   #25000,R15             ; Delay to R15
 L1:         
         dec.w   R15                     ; Decrement R15
         jnz     L1                      ; Delay over?
         jmp     Delay                   ; Again
         NOP
+
+;-------------------------------------------------------------------------------
+; Timer Setup and loop
+;-------------------------------------------------------------------------------
+Timer:		
+        ; Setup Timer TB0
+		bis.w	#TBCLR, &TB0CTL
+		bis.w	#TBSSEL__ACLK, &TB0CTL
+		bis.w	#MC__UP, &TB0CTL
+
+		; Setup Compare Register
+		mov.w	#250000, &TB0CCR0
+
+		bis.w	#CCIE, &TB0CCTL0
+		bic.w	#CCIFG, &TB0CCTL0
+
+		; Enable global interrupts
+		bis.w	#GIE, SR
+L2:
+        jmp     L2                      ; Infinite Loop
+
+;-------------------------------------------------------------------------------
+; Interrupt Service Routines
+;-------------------------------------------------------------------------------
+ISR_TB0_CCR0:
+		xor.b	#BIT0, &P1OUT               ; Toggle LED1 (P1.0)
+		bic.w	#CCIFG, &TB0CCTL0           ; Clear TB1 interrupt flag
+		reti
+
 
 ;-------------------------------------------------------------------------------
 ; Stack Pointer definition
@@ -55,3 +85,6 @@ L1:
 ;-------------------------------------------------------------------------------
             .sect   ".reset"                ; MSP430 RESET Vector
             .short  RESET
+
+            .sect   ".int43"                ; Timer B0 Overflow Vector
+            .short  ISR_TB0_CCR0
